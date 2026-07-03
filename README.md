@@ -16,7 +16,7 @@ MCP config:
   "mcpServers": {
     "xdebug": {
       "command": "node",
-      "args": ["C:/Users/carol/OneDrive/Dokumente/xdebug mcp/dist/index.js"]
+      "args": ["/absolute/path/to/xdebug-mcp/dist/index.js"]
     }
   }
 }
