@@ -1,0 +1,34 @@
+{
+  "name": "xdebug-mcp",
+  "version": "0.2.0+codex.20260703145435",
+  "description": "Drive PHP/Xdebug debugging sessions through MCP.",
+  "author": {
+    "name": "CodeCaroS",
+    "url": "https://github.com/CodeCaroS"
+  },
+  "homepage": "https://github.com/CodeCaroS/xdebug-mcp",
+  "repository": "https://github.com/CodeCaroS/xdebug-mcp",
+  "license": "UNLICENSED",
+  "keywords": [
+    "xdebug",
+    "php",
+    "debugging",
+    "mcp",
+    "dbgp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Xdebug MCP",
+    "shortDescription": "Debug PHP with Xdebug through MCP",
+    "longDescription": "Connect Codex to PHP/Xdebug sessions through a small MCP server that can listen for DBGp connections, inspect sessions, step execution, manage breakpoints, and read variables.",
+    "defaultPrompt": "Use the Xdebug MCP tools when working on PHP debugging tasks. Start the listener, run or attach to a PHP/Xdebug session, inspect the current location and variables, then step or manage breakpoints as needed.",
+    "developerName": "CodeCaroS",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Debug",
+      "Run"
+    ],
+    "websiteURL": "https://github.com/CodeCaroS/xdebug-mcp",
+    "brandColor": "#4F46E5"
+  }
+}

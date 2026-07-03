@@ -80,6 +80,23 @@ It is intentionally not a full IDE. The goal is a small, scriptable debug bridge
    }
    ```
 
+### Codex Plugin
+
+This repository can also be used as a Codex plugin. The plugin manifest is in `.codex-plugin/plugin.json`, and the MCP server definition is in `.mcp.json`.
+
+Build before using the plugin:
+
+```bash
+npm install
+npm run build
+```
+
+The plugin starts the MCP server with:
+
+```bash
+npm run start --silent
+```
+
 ## Usage
 
 Start the listener through your MCP client:
