@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer, Server, Socket } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
   dbgpCommand,
   parseBreakpoints,
@@ -175,81 +175,87 @@ function text(value: unknown) {
   return { content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }] };
 }
 
-export async function main(): Promise<void> {
+export function createMcpServer(): McpServer {
   const bridge = new XdebugBridge();
   const server = new McpServer({ name: "xdebug-mcp", version: "0.2.0" });
 
-  server.tool("xdebug_listen", { host: z.string().default("127.0.0.1"), port: z.number().int().default(9003) }, async ({ host, port }) =>
+  server.registerTool("xdebug_listen", { inputSchema: z.object({ host: z.string().default("127.0.0.1"), port: z.number().int().default(9003) }) }, async ({ host, port }) =>
     text(await bridge.listen(host, port))
   );
 
-  server.tool("xdebug_stop", {}, async () => text(bridge.close()));
+  server.registerTool("xdebug_stop", { inputSchema: z.object({}) }, async () => text(bridge.close()));
 
-  server.tool("xdebug_sessions", {}, async () => text(bridge.list()));
+  server.registerTool("xdebug_sessions", { inputSchema: z.object({}) }, async () => text(bridge.list()));
 
-  server.tool("xdebug_command", { command: z.string(), sessionId: z.string().optional() }, async ({ command, sessionId }) =>
+  server.registerTool("xdebug_command", { inputSchema: z.object({ command: z.string(), sessionId: z.string().optional() }) }, async ({ command, sessionId }) =>
     text(await bridge.command(command, sessionId))
   );
 
-  server.tool("xdebug_run_php", { file: z.string(), args: z.array(z.string()).default([]), cwd: z.string().optional(), env: z.record(z.string()).default({}) }, async ({ file, args, cwd, env }) =>
+  server.registerTool("xdebug_run_php", { inputSchema: z.object({ file: z.string(), args: z.array(z.string()).default([]), cwd: z.string().optional(), env: z.record(z.string(), z.string()).default({}) }) }, async ({ file, args, cwd, env }) =>
     text(await bridge.runPhp(file, args, cwd, env))
   );
 
-  server.tool("xdebug_status", { sessionId: z.string().optional() }, async ({ sessionId }) =>
+  server.registerTool("xdebug_status", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) =>
     text(parseXmlAttributes(await bridge.dbgp("status", {}, undefined, sessionId)))
   );
 
-  server.tool("xdebug_step_into", { sessionId: z.string().optional() }, async ({ sessionId }) => text(await bridge.dbgp("step_into", {}, undefined, sessionId)));
-  server.tool("xdebug_step_over", { sessionId: z.string().optional() }, async ({ sessionId }) => text(await bridge.dbgp("step_over", {}, undefined, sessionId)));
-  server.tool("xdebug_step_out", { sessionId: z.string().optional() }, async ({ sessionId }) => text(await bridge.dbgp("step_out", {}, undefined, sessionId)));
-  server.tool("xdebug_continue", { sessionId: z.string().optional() }, async ({ sessionId }) => text(await bridge.dbgp("run", {}, undefined, sessionId)));
+  server.registerTool("xdebug_step_into", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) => text(await bridge.dbgp("step_into", {}, undefined, sessionId)));
+  server.registerTool("xdebug_step_over", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) => text(await bridge.dbgp("step_over", {}, undefined, sessionId)));
+  server.registerTool("xdebug_step_out", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) => text(await bridge.dbgp("step_out", {}, undefined, sessionId)));
+  server.registerTool("xdebug_continue", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) => text(await bridge.dbgp("run", {}, undefined, sessionId)));
 
-  server.tool("xdebug_stack", { sessionId: z.string().optional() }, async ({ sessionId }) =>
+  server.registerTool("xdebug_stack", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) =>
     text(parseStack(await bridge.dbgp("stack_get", {}, undefined, sessionId)))
   );
 
-  server.tool("xdebug_current_location", { sessionId: z.string().optional() }, async ({ sessionId }) => {
+  server.registerTool("xdebug_current_location", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) => {
     const frame = parseStack(await bridge.dbgp("stack_get", {}, undefined, sessionId))[0];
     return text(frame ? { file: frame.filename, line: Number(frame.lineno), function: frame.where } : null);
   });
 
-  server.tool("xdebug_context", { sessionId: z.string().optional(), depth: z.number().int().optional(), contextId: z.number().int().optional() }, async ({ sessionId, depth, contextId }) =>
+  server.registerTool("xdebug_context", { inputSchema: z.object({ sessionId: z.string().optional(), depth: z.number().int().optional(), contextId: z.number().int().optional() }) }, async ({ sessionId, depth, contextId }) =>
     text(parseProperties(await bridge.dbgp("context_get", { d: depth, c: contextId }, undefined, sessionId)))
   );
 
-  server.tool("xdebug_eval", { expression: z.string(), sessionId: z.string().optional() }, async ({ expression, sessionId }) =>
+  server.registerTool("xdebug_eval", { inputSchema: z.object({ expression: z.string(), sessionId: z.string().optional() }) }, async ({ expression, sessionId }) =>
     text(parseProperties(await bridge.dbgp("eval", {}, expression, sessionId)))
   );
 
-  server.tool("xdebug_breakpoint_set", { file: z.string(), line: z.number().int(), cwd: z.string().optional(), sessionId: z.string().optional() }, async ({ file, line, cwd, sessionId }) =>
+  server.registerTool("xdebug_breakpoint_set", { inputSchema: z.object({ file: z.string(), line: z.number().int(), cwd: z.string().optional(), sessionId: z.string().optional() }) }, async ({ file, line, cwd, sessionId }) =>
     text(parseXmlAttributes(await bridge.dbgp("breakpoint_set", { t: "line", f: bridge.toFileUri(file, cwd), n: line }, undefined, sessionId)))
   );
 
-  server.tool("xdebug_breakpoint_remove", { breakpointId: z.string(), sessionId: z.string().optional() }, async ({ breakpointId, sessionId }) =>
+  server.registerTool("xdebug_breakpoint_remove", { inputSchema: z.object({ breakpointId: z.string(), sessionId: z.string().optional() }) }, async ({ breakpointId, sessionId }) =>
     text(parseXmlAttributes(await bridge.dbgp("breakpoint_remove", { d: breakpointId }, undefined, sessionId)))
   );
 
-  server.tool("xdebug_breakpoint_list", { sessionId: z.string().optional() }, async ({ sessionId }) =>
+  server.registerTool("xdebug_breakpoint_list", { inputSchema: z.object({ sessionId: z.string().optional() }) }, async ({ sessionId }) =>
     text(parseBreakpoints(await bridge.dbgp("breakpoint_list", {}, undefined, sessionId)))
   );
 
-  server.tool("xdebug_feature_get", { name: z.string(), sessionId: z.string().optional() }, async ({ name, sessionId }) =>
+  server.registerTool("xdebug_feature_get", { inputSchema: z.object({ name: z.string(), sessionId: z.string().optional() }) }, async ({ name, sessionId }) =>
     text(parseXmlAttributes(await bridge.dbgp("feature_get", { n: name }, undefined, sessionId)))
   );
 
-  server.tool("xdebug_feature_set", { name: z.string(), value: z.string(), sessionId: z.string().optional() }, async ({ name, value, sessionId }) =>
+  server.registerTool("xdebug_feature_set", { inputSchema: z.object({ name: z.string(), value: z.string(), sessionId: z.string().optional() }) }, async ({ name, value, sessionId }) =>
     text(parseXmlAttributes(await bridge.dbgp("feature_set", { n: name, v: value }, undefined, sessionId)))
   );
 
-  server.tool("xdebug_set_breakpoint_and_run", { file: z.string(), line: z.number().int(), cwd: z.string().optional(), sessionId: z.string().optional() }, async ({ file, line, cwd, sessionId }) => {
+  server.registerTool("xdebug_set_breakpoint_and_run", { inputSchema: z.object({ file: z.string(), line: z.number().int(), cwd: z.string().optional(), sessionId: z.string().optional() }) }, async ({ file, line, cwd, sessionId }) => {
     const breakpoint = parseXmlAttributes(await bridge.dbgp("breakpoint_set", { t: "line", f: bridge.toFileUri(file, cwd), n: line }, undefined, sessionId));
     const run = parseXmlAttributes(await bridge.dbgp("run", {}, undefined, sessionId));
     return text({ breakpoint, run });
   });
 
-  await server.connect(new StdioServerTransport());
+  return server;
+}
+
+export function main(): void {
+  serveStdio(createMcpServer, {
+    onerror: (error) => console.error(error)
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await main();
+  main();
 }
