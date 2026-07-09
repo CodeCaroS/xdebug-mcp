@@ -1,0 +1,3 @@
+dist/** linguist-generated=true
+examples/** linguist-documentation=true
+test/*.mjs linguist-language=TypeScript
