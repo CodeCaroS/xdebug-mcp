@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createConnection } from "node:net";
 import test from "node:test";
-import { XdebugBridge } from "../dist/index.js";
+import { XdebugBridge } from "../src/index.js";
 
 test("accepts an Xdebug init session", async () => {
   const bridge = new XdebugBridge();
@@ -25,7 +25,6 @@ test("accepts an Xdebug init session", async () => {
 
 test("converts existing local paths to file URIs", () => {
   const bridge = new XdebugBridge();
-
   assert.match(bridge.toFileUri("examples/demo.php"), /^file:\/\/\/.*examples\/demo\.php$/);
   assert.throws(() => bridge.toFileUri("examples/missing.php"), /file does not exist/);
 });
